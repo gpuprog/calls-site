@@ -1,0 +1,12 @@
+openai
+tiktoken
+parse
+flask
+
+django
+requests
+
+aiofile
+aiohttp
+aiosmtplib
+ujson

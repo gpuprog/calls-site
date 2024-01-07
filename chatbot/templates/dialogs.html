@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block title %} Dialogs {% endblock %}
+{% block content %}
+<div class="row justify-content-center my-4">
+    <div class="col-md-7 mt-4">
+        <div class="card">
+            <h1 class="card-header text-center">Dialogs list</h1>
+            <div class="card-body">
+              <div class="d-flex justify-content-end">
+                <!--button type="button" class="btn btn-danger mb-3" onclick="location.href='{% url 'new_chat' %}'">Restart</button-->
+              </div>
+              <div class="chat-history mb-3">
+                {% for dialog in dialogs %}
+                    <div class="card mb-2">
+                        <div class="card-body p-2">
+                            <a href="{% url 'home' %}?dialog_id={{ dialog.id }}">
+                                {{ dialog.number }}:&nbsp;<strong>{{ dialog.title }}</strong>
+                            </a>
+                        </div>
+                    </div>
+                {% endfor %}
+              </div>
+              <!--form action="." method="POST">
+                {% csrf_token %}
+                <input class="form-control mb-2" required type="text" autofocus="autofocus" name="prompt" value="{{ prompt }}" id="">
+                <button class="btn btn-success fw-bold" type="submit">
+                    Send
+                </button>
+                <button class="btn btn-primary" style="float:right" type="button" onclick="location.href='{% url 'gen_json' %}'">
+                    Generate JSON
+                </button>
+              </form-->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
