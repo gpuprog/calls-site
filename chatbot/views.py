@@ -7,8 +7,13 @@ import requests
 import uuid
 
 server_key = os.environ['CALLS_API_KEY']
-#server = 'http://127.0.0.1:5000'
-server = 'http://humorous-loosely-coral.ngrok-free.app'
+# if server_key is None:
+#     raise Exception('CALLS_API_KEY environment variable is not defined')
+
+if 'CALLS_SERVER' in os.environ:
+    server = os.environ['CALLS_SERVER']
+else:
+    server = 'http://127.0.0.1:5000'
 
 def j(response):
     if response.status_code != 200:
@@ -49,7 +54,7 @@ class Dialog:
         return j(requests.post(server + '/chat/close', params=self.sparams()))
 
     def reply(self, message):
-        return j(requests.get(server + '/chat/reply', params=self.sparams({'message':message})))
+        return j(requests.post(server + '/chat/reply', params=self.sparams({'message':message})))
     
     def get_id(self):
         return self.dialog_id
