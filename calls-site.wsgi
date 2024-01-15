@@ -16,5 +16,5 @@ with open(ENVS_FILE, 'r') as envs:
             raise Exception(f'Wrong syntax in line {ln} of {ENVS_FILE}: {var}={val}')
         os.environ[var] = val
 
-sys.path.insert(0, os.path.join(FILE_PATH, 'src'))
-from server import app as application
+sys.path.insert(0, os.path.join(FILE_PATH, 'webgui'))
+from wsgi import application
