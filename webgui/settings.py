@@ -15,8 +15,8 @@ import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 # BASE_DIR= os.path.join(os.path.expanduser('~'), 'calls-site')
-BASE_DIR='/var/www/calls-site'
-if not os.path.exists(BASE_DIR):
+BASE_DIR=Path('/var/www/calls-site')
+if not os.path.exists(str(BASE_DIR)):
     # Development
     BASE_DIR = Path(__file__).resolve().parent.parent
 
