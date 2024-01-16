@@ -118,12 +118,12 @@ def home(request):
     if dialog is None:
         return redirect('accounts/login')
     
-    messages = dialog.get_messages()
-    info = dialog.get_info()
-    finished = info['finished']
-    print(messages)
-    
     try:
+        messages = dialog.get_messages()
+
+        info = dialog.get_info()
+        finished = info['finished']
+
         if 'messages' not in request.session:
             request.session['messages'] = messages
             request.session.modified = True
