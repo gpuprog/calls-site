@@ -6,6 +6,8 @@ import os
 import requests
 import uuid
 
+DEFAULT_PHONE_ID = os.environ['DEFAULT_PHONE_ID']
+
 server_key = os.environ['CALLS_API_KEY']
 # if server_key is None:
 #     raise Exception('CALLS_API_KEY environment variable is not defined')
@@ -48,7 +50,7 @@ class Dialog:
     def __init__(self, dialog_id=None):
         self.dialog_id = dialog_id
         if dialog_id is None:
-            self.dialog_id = j(requests.post(server + '/chat/open', params=self.sparams( {'sid':str(uuid.uuid4())} )))['id']
+            self.dialog_id = j(requests.post(server + '/chat/open', params=self.sparams( {'sid':str(uuid.uuid4()), 'phone_id':DEFAULT_PHONE_ID} )))['id']
 
     def close(self):
         return j(requests.post(server + '/chat/close', params=self.sparams()))
