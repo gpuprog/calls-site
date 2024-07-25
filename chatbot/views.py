@@ -78,7 +78,7 @@ class Dialog:
         return j(requests.get(server + '/chat/messages', params=self.sparams()))
        
 
-def get_dialog(request):
+def get_dialog(request, from_request=True):
     if not request.user.is_authenticated:
         return None
     
@@ -90,6 +90,8 @@ def get_dialog(request):
         request.session.modified = True
     
     if 'dialog_id' not in request.session:
+        if not from_request:
+            return None
         dialog = Dialog()
         request.session['dialog_id'] = dialog.get_id()
         request.session.pop('messages', None)
@@ -116,9 +118,11 @@ def dialogs(request):
     return render(request, 'dialogs.html', context)
 
 def home(request):
-    dialog = get_dialog(request)
-    if dialog is None:
+    dialog = get_dialog(request, False)
+    if not request.user.is_authenticated:
         return redirect('accounts/login')
+    if dialog is None:
+        return dialogs(request)
     
     try:
         messages = dialog.get_messages()
