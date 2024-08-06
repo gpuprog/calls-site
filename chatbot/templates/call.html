@@ -12,7 +12,7 @@
 <body>
 <p id="status">Disconnected</p>
 <p id="transcript"></p>
-<button id="start" type="submit" class="btn btn-success fw-bold" onclick="start()">Start</button>
+<button id="start" type="submit" class="btn btn-success fw-bold" onclick="start2()">Start</button>
 <button id="stop" type="submit" class="btn btn-danger mb-3" onclick="stop()">Stop</button>
 <p id="recog_delay"></p>
 <p><button type="button" class="btn btn-danger mb-3" onclick="tell()">Play</button></p>
@@ -45,7 +45,32 @@
 
     var buffers = [];
 
-    // Audio Output Streaming: https://developers.deepgram.com/docs/js-sdk-text-to-speech#audio-output-streaming
+    // https://stackoverflow.com/questions/9439585/play-an-audiobuffersourcenode-twice
+    async function play_buffer(buffer) {
+        let t_play_begin = Date.now();
+        const bufferSourceNode = audioContext.createBufferSource();
+        bufferSourceNode.connect(audioContext.destination);
+        let audio = await audioContext.decodeAudioData(buffer);
+        //console.log(`${time()} PLAY_BUFFER ${audio.length}`);
+        bufferSourceNode.buffer = audio;
+        let t_play_start = Date.now();
+
+        // Preparations very fast - 1..2ms
+        //console.log(`PLAY_BUFFER DELAY ${t_play_start - t_play_begin}ms`)
+
+        buffers.push(bufferSourceNode);
+        if(buffers.length==1)
+            bufferSourceNode.start();
+
+        bufferSourceNode.onended = (event) => {
+            //console.log(`${time()} END PLAY_BUFFER ${event.srcElement.buffer.length}`);
+            buffers.shift();
+            if(buffers.length>0)
+                buffers[0].start();
+        }
+    }
+
+        // Audio Output Streaming: https://developers.deepgram.com/docs/js-sdk-text-to-speech#audio-output-streaming
     // Tips: https://developers.deepgram.com/docs/streaming-the-audio-output#tips
         // Python can use "chunk size" here
     // Latency tips: https://developers.deepgram.com/docs/text-to-speech-latency
@@ -54,30 +79,6 @@
         let t_start = Date.now();
         initPlay();
         let t_init = Date.now();
-        // https://stackoverflow.com/questions/9439585/play-an-audiobuffersourcenode-twice
-        async function play_buffer(buffer) {
-            let t_play_begin = Date.now();
-            const bufferSourceNode = audioContext.createBufferSource();
-            bufferSourceNode.connect(audioContext.destination);
-            let audio = await audioContext.decodeAudioData(buffer);
-            //console.log(`${time()} PLAY_BUFFER ${audio.length}`);
-            bufferSourceNode.buffer = audio;
-            let t_play_start = Date.now();
-
-            // Preparations very fast - 1..2ms
-            //console.log(`PLAY_BUFFER DELAY ${t_play_start - t_play_begin}ms`)
-
-            buffers.push(bufferSourceNode);
-            if(buffers.length==1)
-                bufferSourceNode.start();
-
-            bufferSourceNode.onended = (event) => {
-                //console.log(`${time()} END PLAY_BUFFER ${event.srcElement.buffer.length}`);
-                buffers.shift();
-                if(buffers.length>0)
-                    buffers[0].start();
-            }
-        }
 
         const requestConfig = {
             method: "POST",
@@ -159,6 +160,53 @@
         play("Hello, how can I help you today?");
     }
 
+    //////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////
+    //////////////////////////////////////////////////////////////////////////
+    function start2() {
+        initPlay(); // ~400ms once
+        document.getElementById("start").style.display = "none";
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            //console.log({ stream });
+            mediaStream = stream;
+            let options  = {
+                // https://www.thoughtco.com/audio-file-mime-types-3469485
+                //mimeType: "audio/wav"
+            };
+            mediaRecorder = new MediaRecorder(stream, options);
+            const socket = new WebSocket('{{socket_mediarecorder_addr}}');
+            socket.onopen = () => {
+                //console.log({ event: 'onopen' });
+                mediaRecorder.addEventListener('dataavailable', event => {
+                    if (event.data.size > 0 && socket.readyState == 1) {
+                        socket.send(event.data);
+                    }
+                });
+                mediaRecorder.start(100);
+                document.querySelector('#status').textContent = 'Connected';
+                document.getElementById("stop").style.display = "block";
+            }
+
+            socket.onmessage = async (event) => {
+                console.log(event);
+                let buffer = await event.data.arrayBuffer()
+                await play_buffer(buffer);
+            }
+                
+            socket.onclose = () => {
+                //console.log({ event: 'onclose' });
+                document.querySelector('#status').textContent = 'Disconnected';
+                document.getElementById("start").style.display = "block";
+            }
+                
+            socket.onerror = (error) => {
+                //console.log({ event: 'onerror', error });
+                document.querySelector('#status').textContent = 'Disconnected by ERROR: ' + error;
+            }
+        });
+    }
+    
     // Delays: https://developers.deepgram.com/docs/text-to-speech-latency
     function start() {
         initPlay(); // ~400ms once
