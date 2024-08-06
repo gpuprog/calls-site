@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Call</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://api.deepgram.com">
+    <link rel="preconnect" href="https://api.openai.com">
+</head>
+<body>
+<p id="status">Disconnected</p>
+<p id="transcript"></p>
+<button id="start" type="submit" class="btn btn-success fw-bold" onclick="start()">Start</button>
+<button id="stop" type="submit" class="btn btn-danger mb-3" onclick="stop()">Stop</button>
+<p id="recog_delay"></p>
+<p><button type="button" class="btn btn-danger mb-3" onclick="tell()">Play</button></p>
+<p id="play_delay"></p>
+<p id="gpt_delay"></p>
+<script>
+    mediaRecorder = null;
+    mediaStream = null;
+    document.getElementById("stop").style.display = "none";
+
+    const DEEPGRAM_RECOG_URL = "wss://api.deepgram.com/v1/listen?model=nova-2-phonecall&language=en";
+    //const DEEPGRAM_RECOG_URL = "wss://api.deepgram.com/v1/listen?model=base"
+    // Language codes: https://developers.deepgram.com/docs/models-languages-overview
+    // opus: fastest for my browser ~2ms (but quality is not ideal); other worse than mp3 (default)
+    const DEEPGRAM_SPEAK_URL = "https://api.deepgram.com/v1/speak?model=aura-asteria-en&encoding=mp3";
+    function time() {
+        date = new Date(Date.now())
+        return `${date.getHours()}:${date.getMinutes()}:${date.getSeconds()}.${date.getMilliseconds()}`;
+    }
+
+    const textDecoder = new TextDecoder("utf-8");
+    const dataRe = /data:\s+(.+)\n\n/g;
+
+    var audioContext = null;
+    function initPlay() {
+        if(!audioContext) {
+            audioContext = new AudioContext();
+        }
+    }
+
+    var buffers = [];
+
+    // Audio Output Streaming: https://developers.deepgram.com/docs/js-sdk-text-to-speech#audio-output-streaming
+    // Tips: https://developers.deepgram.com/docs/streaming-the-audio-output#tips
+        // Python can use "chunk size" here
+    // Latency tips: https://developers.deepgram.com/docs/text-to-speech-latency
+    // https://medium.com/@kamresh485/optimizing-network-calls-b42641f9ef6a
+    async function play(text) {
+        let t_start = Date.now();
+        initPlay();
+        let t_init = Date.now();
+        // https://stackoverflow.com/questions/9439585/play-an-audiobuffersourcenode-twice
+        async function play_buffer(buffer) {
+            let t_play_begin = Date.now();
+            const bufferSourceNode = audioContext.createBufferSource();
+            bufferSourceNode.connect(audioContext.destination);
+            let audio = await audioContext.decodeAudioData(buffer);
+            //console.log(`${time()} PLAY_BUFFER ${audio.length}`);
+            bufferSourceNode.buffer = audio;
+            let t_play_start = Date.now();
+
+            // Preparations very fast - 1..2ms
+            //console.log(`PLAY_BUFFER DELAY ${t_play_start - t_play_begin}ms`)
+
+            buffers.push(bufferSourceNode);
+            if(buffers.length==1)
+                bufferSourceNode.start();
+
+            bufferSourceNode.onended = (event) => {
+                //console.log(`${time()} END PLAY_BUFFER ${event.srcElement.buffer.length}`);
+                buffers.shift();
+                if(buffers.length>0)
+                    buffers[0].start();
+            }
+        }
+
+        const requestConfig = {
+            method: "POST",
+            headers: {
+                "Authorization": "Token {{deepgram_api_key}}",
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                text: text,
+            })
+        };
+    
+        let res = await fetch(DEEPGRAM_SPEAK_URL, requestConfig); // 500...1100ms (typical 550ms)
+        let t_response = Date.now();
+        let delay = `PLAY DELAY: ${t_response-t_start} (init=${t_init-t_start}ms + fetch response=${t_response-t_init}ms)`;
+        console.log(delay);
+        document.querySelector('#play_delay').textContent = delay;
+        for await (const chunk of res.body) { // 0..250ms (typical 220ms)
+            //let t_chunk = Date.now();
+            await play_buffer(chunk.buffer);
+        }
+
+    }
+
+    var answer_string = "";
+
+    async function ask_gpt(question) {
+        t_gpt_start = Date.now();
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+            method: 'POST',
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": "Bearer {{openai_api_key}}"
+            },
+            body: JSON.stringify({
+                model: "gpt-4o",
+                stream: true,
+                messages: [
+                    { role: "system", content: "You are phone assistant, conencted to user via speech-to-text technology. Answer shortly on user question." },
+                    { role: "user", content: question }
+                ]
+            })
+        });
+        if (!res.ok) {
+            play("Technical error!");
+            return;
+        }
+        let fetch_time = Date.now();
+        for await (const part of res.body) {
+            text = textDecoder.decode(part);
+            const textParts = text.match(dataRe);
+            for(const n in textParts) {
+                let textPart = textParts[n].replace("data:", "");
+                //console.log(textPart);
+                if (textPart == " [DONE]\n\n")
+                    break;
+                let json = JSON.parse(textPart);
+                let answer = json.choices[0]?.delta?.content || "";
+                if(answer == "")
+                    continue;
+                console.log(answer);
+                answer_string += answer;
+
+                let final = answer.match(/[.,!?]/g);
+                if(final) {
+                    let delay_gpt = `GPT TIME: ${Date.now() - t_gpt_start}ms (fetch in ${fetch_time - t_gpt_start}ms)`;
+                    document.querySelector('#gpt_delay').textContent = delay_gpt;
+                    console.log(`PLAY ${answer_string}\n\t${delay_gpt}`);
+                    play(answer_string);
+                    answer_string = '';
+                }
+            }
+        }
+        //data = await res.json();
+        //return data.choices[0].message.content;
+    }
+
+    function tell() {
+        play("Hello, how can I help you today?");
+    }
+
+    // Delays: https://developers.deepgram.com/docs/text-to-speech-latency
+    function start() {
+        initPlay(); // ~400ms once
+        document.getElementById("start").style.display = "none";
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+            //console.log({ stream });
+            mediaStream = stream;
+            let options  = {
+                // https://www.thoughtco.com/audio-file-mime-types-3469485
+                //mimeType: "audio/wav"
+            };
+            mediaRecorder = new MediaRecorder(stream, options);
+            const socket = new WebSocket(DEEPGRAM_RECOG_URL,
+                [ 'token', '{{deepgram_api_key}}' ]);
+
+            socket.onopen = () => {
+                //console.log({ event: 'onopen' });
+                mediaRecorder.addEventListener('dataavailable', event => {
+                    if (event.data.size > 0 && socket.readyState == 1) {
+                        socket.send(event.data);
+                    }
+                });
+                mediaRecorder.start(100);
+                document.querySelector('#status').textContent = 'Connected';
+                document.getElementById("stop").style.display = "block";
+            }
+                
+            socket.onmessage = (message) => {
+                //console.log(message);
+                if (message.type != 'message')
+                    return;
+                const received = JSON.parse(message.data);
+                if (received.type != 'Results')
+                    return;
+                //console.log(received);
+                const transcript = received.channel.alternatives[0].transcript
+                if (transcript) {
+                    console.log(transcript + (received.is_final ? ' FINAL' : ''));
+                }
+                if (transcript && received.is_final) {
+                    document.querySelector('#transcript').textContent = transcript;
+                    ask_gpt(transcript);
+                }
+            }
+                
+            socket.onclose = () => {
+                //console.log({ event: 'onclose' });
+                document.querySelector('#status').textContent = 'Disconnected';
+                document.getElementById("start").style.display = "block";
+            }
+                
+            socket.onerror = (error) => {
+                //console.log({ event: 'onerror', error });
+                document.querySelector('#status').textContent = 'Disconnected by ERROR: ' + error;
+            }
+        });
+    }
+
+    function stop() {
+        document.getElementById("stop").style.display = "none";
+        //mediaRecorder.stop(); // Not faster & not full
+        mediaStream.getTracks().forEach( (track) => { track.stop(); } );
+        document.querySelector('#status').textContent = 'Disconnecting...';
+        document.querySelector('#transcript').textContent = '';
+    }
+</script>
+</body>
+</html>

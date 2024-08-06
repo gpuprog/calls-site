@@ -16,6 +16,7 @@
             {% if 'dialogs' not in request.path %}
                 <a href="{% url 'dialogs' %}">dialogs</a>
             {% endif %}
+            <a href="{% url 'call' %}">call</a>
             <a style="float:right" href="{% url 'logout' %}?next={{ request.path }}">logout {{ user.get_username }}</a>
         {% endif %}
     </p>

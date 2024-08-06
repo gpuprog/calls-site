@@ -9,10 +9,30 @@
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/manage.py",
-            "args": ["runserver", "0.0.0.0:8080"],
+            "args": [
+                "runserver",
+                "0.0.0.0:8080"
+            ],
             "envFile": "${workspaceFolder}/.envs",
             "console": "integratedTerminal",
             "justMyCode": true
+        },
+        {
+            "name": "Delays Test",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/chatbot/call.py",
+            "args": [
+            ],
+            "envFile": "${workspaceFolder}/.envs",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "type": "chrome",
+            "name": "Call",
+            "request": "launch",
+            "url": "${workspaceFolder}/chatbot/templates/call.html"
         }
     ]
 }

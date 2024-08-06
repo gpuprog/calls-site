@@ -1,5 +1,6 @@
 from django.urls import path, include
 from . import views
+from . import call
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -10,4 +11,5 @@ urlpatterns = [
     path('gen_json/', views.gen_json, name='gen_json'),
     path('error-handler/', views.error_handler, name='error_handler'),
     path('accounts/', include('django.contrib.auth.urls')),
+    path('call/', call.onsite, name='call')
 ]
